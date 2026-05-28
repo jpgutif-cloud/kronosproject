@@ -4,7 +4,7 @@ const GAME_W = 1030, GAME_H = 648;
 const USE_FULL_SCENE_BACKGROUND = true;
 const USE_HYBRID_ENVIRONMENT = false;
 const USE_BAKED_ENVIRONMENT = true;
-const USE_GENERATED_AGENT_ART = false;
+const USE_GENERATED_AGENT_ART = true;
 // Always attempt to load images — Phaser uses <img> elements so file:// works fine in Chrome.
 const CAN_LOAD_PHASER_IMAGES = true;
 const OFFICE_BASE_KEY = 'office-full';
@@ -190,11 +190,13 @@ const FURNITURE_ASSETS = [
   { key: 'plant-small-prop', path: `${GENERATED_ASSET_BASE}/architecture_props/16.png` },
 ];
 
+// Frame assignment per agent: [idle, walk1, walk2, seated, interact, talk]
+// Mapped from crops/characters_animation/ after visual inspection.
 const GENERATED_AGENT_FRAMES = {
-  ARLO: ['01', '02', '03', '06', '07', '08'],
-  REX:  ['09', '10', '11', '14', '15', '16'],
-  ZARA: ['17', '18', '19', '22', '23', '24'],
-  PIP:  ['25', '26', '27', '30', '31', '32'],
+  ARLO: ['01', '02', '05', '04', '06', '08'], // 04=at laptop, 08=waving
+  REX:  ['09', '12', '16', '10', '13', '14'], // 10=gaming chair, 14=pointing
+  ZARA: ['17', '20', '21', '22', '19', '18'], // 22=gaming chair seated
+  PIP:  ['26', '28', '29', '25', '27', '30'], // 26=idle+clipboard, 25=desk writing
 };
 
 const WALL_OVERLAY_ASSETS = [
@@ -1521,7 +1523,7 @@ class OfficeScene extends Phaser.Scene {
         : this.add.sprite(pos.x, pos.y, name.toLowerCase(), 0);
 
       sprite.setDepth(10);
-      sprite.setScale(usesGeneratedArt ? 0.22 : 1.5);
+      sprite.setScale(usesGeneratedArt ? 0.28 : 1.5);
       sprite.setOrigin(0.5, 1);
       sprite.setName(name);
       sprite.setInteractive({ useHandCursor: true });
