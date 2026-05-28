@@ -1,0 +1,14 @@
+{
+  "version": 2,
+  "name": "kronosproject",
+  "public": true,
+  "outputDirectory": "stream",
+  "buildCommand": null,
+  "installCommand": null,
+  "framework": null,
+  "routes": [
+    { "src": "/", "dest": "/index.html" },
+    { "src": "/app", "dest": "/app.html" },
+    { "handle": "filesystem" }
+  ]
+}
