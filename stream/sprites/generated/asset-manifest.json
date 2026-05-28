@@ -1,0 +1,107 @@
+{
+  "generatedAt": "2026-05-27",
+  "style": {
+    "camera": "isometric 30-degree tilt",
+    "rendering": "high-detail pixel art, crisp edges, painted highlights and shadows",
+    "reference": "/Users/alien/Downloads/Office_for_4_AI_robot_202605270915.jpeg"
+  },
+  "sheets": [
+    {
+      "id": "kitchen_espresso_fridge",
+      "source": "source/kitchen_espresso_fridge_sheet.png",
+      "alpha": "alpha/kitchen_espresso_fridge_sheet.png",
+      "crops": "crops/kitchen_espresso_fridge/",
+      "contents": [
+        "espresso machine on cabinet plus refrigerator"
+      ],
+      "layout": "3 horizontal lighting variants: cool office, warm lounge/kitchen, neon accent",
+      "phaserUse": "Static kitchen background prop; choose one lighting variant and slice manually."
+    },
+    {
+      "id": "lounge_sofas_table",
+      "source": "source/lounge_sofas_table_sheet.png",
+      "alpha": "alpha/lounge_sofas_table_sheet.png",
+      "crops": "crops/lounge_sofas_table/",
+      "contents": [
+        "long black leather sofa",
+        "short black leather sofa",
+        "round coffee table with books and mug"
+      ],
+      "layout": "3 rows of lighting variants x 3 object columns",
+      "phaserUse": "Static lounge props; slice per object."
+    },
+    {
+      "id": "office_workstations",
+      "source": "source/office_workstations_sheet.png",
+      "alpha": "alpha/office_workstations_sheet.png",
+      "crops": "crops/office_workstations/",
+      "contents": [
+        "four modular workstation orientations with laptop, lamp, keyboard, mouse, cables"
+      ],
+      "layout": "2 x 2 desk orientation grid",
+      "phaserUse": "Static/interactive office desks; pair with chair states and character sit poses."
+    },
+    {
+      "id": "seating_states",
+      "source": "source/seating_states_sheet.png",
+      "alpha": "alpha/seating_states_sheet.png",
+      "crops": "crops/seating_states/",
+      "contents": [
+        "office chair idle",
+        "office chair adjusted/occupied",
+        "bar stool idle",
+        "bar stool adjusted/occupied"
+      ],
+      "layout": "2 x 2 interaction-state grid",
+      "phaserUse": "Interactive seating states; swap texture frame when an agent sits."
+    },
+    {
+      "id": "ping_pong",
+      "source": "source/ping_pong_sheet.png",
+      "alpha": "alpha/ping_pong_sheet.png",
+      "crops": "crops/ping_pong/",
+      "contents": [
+        "ping-pong table",
+        "wooden paddle",
+        "red paddle",
+        "white ball"
+      ],
+      "layout": "large table plus smaller isolated props below",
+      "phaserUse": "Game-room prop plus small interaction sprites."
+    },
+    {
+      "id": "characters_animation",
+      "source": "source/characters_animation_sheet.png",
+      "alpha": "alpha/characters_animation_sheet.png",
+      "crops": "crops/characters_animation/",
+      "contents": [
+        "ARLO",
+        "Rex",
+        "Zara",
+        "Pip"
+      ],
+      "layout": "4 character rows x 8 intended pose columns: idle DL, walk DL 1, walk DL 2, idle UR, walk UR 1, seated, desk interact, chat/wave",
+      "phaserUse": "Prototype character animation sheet; inspect and slice frames manually before final use."
+    },
+    {
+      "id": "architecture_props",
+      "source": "source/architecture_props_sheet.png",
+      "alpha": "alpha/architecture_props_sheet.png",
+      "crops": "crops/architecture_props/",
+      "contents": [
+        "wall segments",
+        "floor tile patches",
+        "glass partition",
+        "bookshelf",
+        "plant",
+        "poster",
+        "rug",
+        "globe lamp",
+        "outlet panel",
+        "trash bin"
+      ],
+      "layout": "mixed prop grid",
+      "phaserUse": "Room construction kit; slice individual props and layer behind furniture."
+    }
+  ]
+}

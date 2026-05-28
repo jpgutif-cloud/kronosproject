@@ -1,0 +1,278 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8">
+<title>KRONOS — Notion Setup</title>
+<style>
+* { box-sizing: border-box; margin: 0; padding: 0; }
+body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; background: #f4f4f0; min-height: 100vh; display: flex; align-items: center; justify-content: center; padding: 20px; }
+.card { background: white; border-radius: 12px; padding: 32px; max-width: 640px; width: 100%; box-shadow: 0 1px 3px rgba(0,0,0,.1); }
+h1 { font-size: 20px; font-weight: 600; margin-bottom: 6px; }
+.subtitle { color: #666; font-size: 14px; margin-bottom: 28px; }
+.step { display: flex; gap: 14px; margin-bottom: 20px; align-items: flex-start; }
+.step-num { width: 28px; height: 28px; border-radius: 50%; background: #111; color: white; display: flex; align-items: center; justify-content: center; font-size: 12px; font-weight: 600; flex-shrink: 0; margin-top: 2px; }
+.step-num.done { background: #16a34a; }
+.step-num.error { background: #dc2626; }
+.step-num.running { background: #2563eb; }
+.step-content .label { font-size: 14px; font-weight: 500; }
+.step-content .detail { font-size: 12px; color: #888; margin-top: 2px; line-height: 1.5; }
+.step-content .detail a { color: #2563eb; }
+.btn { background: #111; color: white; border: none; padding: 12px 24px; border-radius: 8px; font-size: 14px; font-weight: 500; cursor: pointer; width: 100%; margin-top: 12px; }
+.btn:disabled { background: #ccc; cursor: not-allowed; }
+.btn:hover:not(:disabled) { background: #333; }
+.log { background: #f8f8f6; border-radius: 8px; padding: 14px; margin-top: 16px; font-family: monospace; font-size: 12px; line-height: 1.7; color: #333; max-height: 240px; overflow-y: auto; display: none; }
+.log.visible { display: block; }
+.log .success { color: #16a34a; }
+.log .error { color: #dc2626; }
+.log .info { color: #2563eb; }
+.result-link { display: block; margin-top: 16px; padding: 12px; background: #f0fdf4; border-radius: 8px; border: 1px solid #bbf7d0; text-align: center; font-size: 14px; color: #15803d; font-weight: 500; text-decoration: none; }
+</style>
+</head>
+<body>
+<div class="card">
+  <h1>🤖 KRONOS — Setup Notion</h1>
+  <p class="subtitle">Crea el workspace completo de KRONOS en tu Notion con un click.</p>
+
+  <div class="step" id="s1">
+    <div class="step-num" id="n1">1</div>
+    <div class="step-content">
+      <div class="label">Página principal — KRONOS HQ</div>
+      <div class="detail">Página raíz con descripción del proyecto y estado actual</div>
+    </div>
+  </div>
+  <div class="step" id="s2">
+    <div class="step-num" id="n2">2</div>
+    <div class="step-content">
+      <div class="label">Base de datos — Roadmap & Tareas</div>
+      <div class="detail">Tasks con fases, prioridades y estado</div>
+    </div>
+  </div>
+  <div class="step" id="s3">
+    <div class="step-num" id="n3">3</div>
+    <div class="step-content">
+      <div class="label">Base de datos — Funding Tracker</div>
+      <div class="detail">CORFO, Start-Up Chile, Anthropic Fellows, sponsors</div>
+    </div>
+  </div>
+  <div class="step" id="s4">
+    <div class="step-num" id="n4">4</div>
+    <div class="step-content">
+      <div class="label">Base de datos — CRM / Pipeline</div>
+      <div class="detail">Prospectos, estado, revenue estimado</div>
+    </div>
+  </div>
+  <div class="step" id="s5">
+    <div class="step-num" id="n5">5</div>
+    <div class="step-content">
+      <div class="label">Base de datos — Métricas diarias</div>
+      <div class="detail">Revenue, clientes, spend del agente, phase</div>
+    </div>
+  </div>
+  <div class="step" id="s6">
+    <div class="step-num" id="n6">6</div>
+    <div class="step-content">
+      <div class="label">Páginas de documentación</div>
+      <div class="detail">Arquitectura, playbooks, guía de setup, safety rules</div>
+    </div>
+  </div>
+
+  <button class="btn" id="startBtn" onclick="runSetup()">Crear workspace en Notion</button>
+
+  <div class="log" id="log"></div>
+  <div id="finalLink"></div>
+</div>
+
+<script>
+let notionPageId = null
+
+async function callNotion(prompt) {
+  const resp = await fetch('https://api.anthropic.com/v1/messages', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({
+      model: 'claude-sonnet-4-20250514',
+      max_tokens: 1000,
+      mcp_servers: [{ type: 'url', url: 'https://mcp.notion.com/mcp', name: 'notion' }],
+      messages: [{ role: 'user', content: prompt }]
+    })
+  })
+  const data = await resp.json()
+  return data
+}
+
+function log(msg, type = '') {
+  const el = document.getElementById('log')
+  el.classList.add('visible')
+  const line = document.createElement('div')
+  line.className = type
+  line.textContent = msg
+  el.appendChild(line)
+  el.scrollTop = el.scrollHeight
+}
+
+function setStep(n, state) {
+  const el = document.getElementById('n' + n)
+  el.className = 'step-num ' + state
+  el.textContent = state === 'done' ? '✓' : state === 'error' ? '✗' : n
+}
+
+async function runSetup() {
+  const btn = document.getElementById('startBtn')
+  btn.disabled = true
+  btn.textContent = 'Creando...'
+
+  try {
+    // Step 1: Create root page
+    setStep(1, 'running')
+    log('→ Creando página KRONOS HQ...')
+    const r1 = await callNotion(`Create a new Notion page called "🤖 KRONOS HQ" with the following content:
+
+Title: 🤖 KRONOS HQ
+Content blocks:
+- Heading 2: "Proyecto"
+- Paragraph: "Agente de IA autónomo que genera revenue para comprar su propio hardware de inferencia local (MacBook Pro M5 Max) y luego opera negocios digitales de forma semi-autónoma."
+- Heading 2: "Estado actual"  
+- Callout with 🌱 emoji: "Fase: BOOTSTRAP | Objetivo: Acumular $4,000–7,000 USD | Día: 1"
+- Heading 2: "Quick links"
+- Bullets: Roadmap, Pipeline CRM, Funding Tracker, Métricas, Documentación
+
+Return the page ID in your response.`)
+
+    const text1 = r1.content?.find(b => b.type === 'text')?.text ?? ''
+    const idMatch = text1.match(/[0-9a-f]{32}|[0-9a-f-]{36}/i)
+    if (idMatch) {
+      notionPageId = idMatch[0]
+      log('✓ Página raíz creada: ' + notionPageId, 'success')
+    } else {
+      log('✓ Página creada (ID no extraído automáticamente)', 'success')
+    }
+    setStep(1, 'done')
+
+    // Step 2: Roadmap database
+    setStep(2, 'running')
+    log('→ Creando base de datos de tareas...')
+    await callNotion(`In the KRONOS HQ Notion workspace, create a database called "📋 Roadmap & Tareas" with these properties:
+- Name (title)
+- Fase (select): BOOTSTRAP, EARNING, MAC_ACQUIRED, SCALING
+- Estado (select): Por hacer, En curso, Bloqueado, Hecho
+- Prioridad (select): Alta, Media, Baja
+- Agente (select): Orchestrator, Researcher, Executor, Analyst, Reporter, Manual
+- Fecha límite (date)
+- Revenue esperado (number, format: dollar)
+- Notas (text)
+
+Pre-populate with these tasks:
+1. "Configurar .env con APIs" | BOOTSTRAP | En curso | Alta | Manual
+2. "Deploy en Railway 24/7" | BOOTSTRAP | Por hacer | Alta | Manual  
+3. "Primer ciclo sin errores" | BOOTSTRAP | Por hacer | Alta | Orchestrator
+4. "10 emails de outreach enviados" | BOOTSTRAP | Por hacer | Alta | Executor
+5. "Primera auditoría cerrada ($600)" | BOOTSTRAP | Por hacer | Alta | Executor
+6. "Aplicar a CORFO Expande" | BOOTSTRAP | Por hacer | Media | Manual
+7. "Aplicar a Anthropic Fellows" | BOOTSTRAP | Por hacer | Alta | Manual
+8. "Grabar primer TikTok del proyecto" | BOOTSTRAP | Por hacer | Media | Manual
+9. "Publicar Kronos Starter en Gumroad" | EARNING | Por hacer | Alta | Manual
+10. "Comprar MacBook Pro M5 Max" | MAC_ACQUIRED | Por hacer | Alta | Manual`)
+    log('✓ Base de datos de tareas creada', 'success')
+    setStep(2, 'done')
+
+    // Step 3: Funding tracker
+    setStep(3, 'running')
+    log('→ Creando Funding Tracker...')
+    await callNotion(`Create a Notion database called "💰 Funding Tracker" with properties:
+- Nombre (title)
+- Tipo (select): Fondo Público, Fellowship, Sponsor, Préstamo, Barter, Grant Internacional
+- Estado (select): Por aplicar, Aplicado, En revisión, Aprobado, Rechazado
+- Monto estimado USD (number, dollar format)
+- Fecha límite (date)
+- Probabilidad (select): Alta, Media, Baja
+- URL (url)
+- Notas (text)
+
+Pre-populate with these rows:
+1. "CORFO Expande" | Fondo Público | Por aplicar | 27000 | Alta | https://corfo.cl
+2. "Start-Up Chile BIG 13" | Fondo Público | Por aplicar | 15000 | Media | https://startupchile.org
+3. "Anthropic Fellows Program" | Fellowship | Por aplicar | 61600 | Media | https://alignment.anthropic.com
+4. "Anthropic Research Credits" | Grant Internacional | Por aplicar | 5000 | Alta | https://anthropic.com
+5. "Sponsorship Retell AI" | Sponsor | Por aplicar | 5000 | Media | https://retellai.com
+6. "Sponsorship Supabase" | Sponsor | Por aplicar | 3000 | Media | https://supabase.com
+7. "ANID Startup Ciencia" | Fondo Público | Por aplicar | 140000 | Baja | https://anid.cl
+8. "Barter con empresa tech RM" | Barter | Por aplicar | 7000 | Media`)
+    log('✓ Funding Tracker creado con 8 oportunidades', 'success')
+    setStep(3, 'done')
+
+    // Step 4: CRM
+    setStep(4, 'running')
+    log('→ Creando CRM / Pipeline...')
+    await callNotion(`Create a Notion database called "🎯 CRM / Pipeline" with properties:
+- Empresa (title)
+- Industria (select): Dental, Inmobiliaria, Contabilidad, Legal, Logística, Tech, Otro
+- Ciudad (select): Santiago, Viña, Concepción, Otro
+- Estado (select): Lead frío, Contactado, Respondió, Reunión agendada, Propuesta enviada, Cliente, Perdido
+- Servicio (select): Auditoría AI, Voice AI, Ghostwriting LinkedIn, Outreach Agent
+- Revenue estimado USD (number, dollar)
+- Revenue real USD (number, dollar)
+- Fecha primer contacto (date)
+- Próxima acción (text)
+- Email (email)
+- Notas (text)`)
+    log('✓ CRM creado', 'success')
+    setStep(4, 'done')
+
+    // Step 5: Daily metrics
+    setStep(5, 'running')
+    log('→ Creando tracking de métricas...')
+    await callNotion(`Create a Notion database called "📊 Métricas Diarias" with properties:
+- Fecha (title / date)
+- Fase (select): BOOTSTRAP, EARNING, MAC_ACQUIRED, SCALING
+- Revenue del día USD (number, dollar)
+- Revenue total acumulado USD (number, dollar)
+- Emails enviados (number)
+- Respuestas recibidas (number)
+- Reuniones agendadas (number)
+- Clientes activos (number)
+- Spend API/tools USD (number, dollar)
+- Ciclos del agente (number)
+- Errores del agente (number)
+- Nota del día (text)`)
+    log('✓ Métricas diarias creadas', 'success')
+    setStep(5, 'done')
+
+    // Step 6: Documentation pages
+    setStep(6, 'running')
+    log('→ Creando páginas de documentación...')
+    await callNotion(`Create the following child pages under KRONOS HQ in Notion:
+
+1. Page: "🏗️ Arquitectura Técnica"
+   Content: Description of the multi-agent system with sections for: Orchestrator, Researcher, Analyst, Executor, Reporter, Safety Layer, Memory, Tools Stack.
+
+2. Page: "🎮 Playbooks"
+   Content: Sections for each playbook: Auditoría AI Sprint, Voice AI para Clínicas, Ghostwriting LinkedIn, Outreach B2B. Each with: descripción, target cliente, ticket promedio, flujo de trabajo, tools necesarios.
+
+3. Page: "🔐 Safety & Guardrails"
+   Content: Documentation of all safety rules: budget caps, approval workflow, blocked content categories, dry run mode, audit trail.
+
+4. Page: "📦 Kronos Starter (Producto Vendible)"
+   Content: Product description, pricing strategy ($297-497), distribution (Gumroad + Twitter), setup wizard documentation, what's included, support policy.
+
+5. Page: "🎬 Content Calendar"
+   Content: TikTok/Twitter content plan documenting the KRONOS experiment: weekly video ideas, viral hooks, before/after format.`)
+    log('✓ 5 páginas de documentación creadas', 'success')
+    setStep(6, 'done')
+
+    log('', '')
+    log('🎉 ¡Workspace de KRONOS creado exitosamente en Notion!', 'success')
+
+    btn.textContent = '✓ Workspace creado'
+
+    const linkDiv = document.getElementById('finalLink')
+    linkDiv.innerHTML = '<a href="https://notion.so" target="_blank" class="result-link">→ Abrir Notion y buscar "KRONOS HQ"</a>'
+
+  } catch (err) {
+    log('Error: ' + (err.message ?? String(err)), 'error')
+    btn.disabled = false
+    btn.textContent = 'Reintentar'
+  }
+}
+</script>
+</body>
+</html>

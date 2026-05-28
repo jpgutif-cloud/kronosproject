@@ -1,0 +1,894 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=1280">
+  <title>ARLO.AI — Live Office Stream</title>
+  <style>
+    /* ── DESIGN TOKENS ─────────────────────────────────────────────── */
+    :root {
+      --bg:          #06060F;
+      --bg-panel:    #09091A;
+      --bg-panel2:   #0D0D22;
+      --bg-hover:    #12122E;
+      --border:      #181838;
+      --border-hi:   #282860;
+      --amber:       #F5A623;
+      --amber-glow:  rgba(245,166,35,.14);
+      --amber-dim:   rgba(245,166,35,.06);
+      --blue:        #00CFFF;
+      --blue-glow:   rgba(0,207,255,.12);
+      --green:       #52B71E;
+      --green-glow:  rgba(82,183,30,.14);
+      --purple:      #8B7FE8;
+      --purple-glow: rgba(139,127,232,.12);
+      --pink:        #F4C0D1;
+      --pink-glow:   rgba(244,192,209,.12);
+      --red:         #FF3344;
+      --text:        #E8E8FF;
+      --text-mid:    #8888BB;
+      --text-dim:    #484878;
+      --font:        'Courier New', 'Consolas', monospace;
+    }
+
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+
+    html, body {
+      width: 1280px; height: 720px;
+      overflow: hidden;
+      background: var(--bg);
+      font-family: var(--font);
+      color: var(--text);
+      user-select: none;
+    }
+
+    /* ── TOPBAR ──────────────────────────────────────────────────────── */
+    #topbar {
+      width: 1280px; height: 36px;
+      background: var(--bg-panel);
+      border-bottom: 1px solid var(--border);
+      display: flex; align-items: center; gap: 14px;
+      padding: 0 14px;
+      position: relative; z-index: 10;
+    }
+
+    /* Live badge */
+    .live-badge {
+      display: flex; align-items: center; gap: 5px;
+      font-size: 10px; font-weight: bold; letter-spacing: 1.5px;
+      color: var(--red); flex-shrink: 0;
+    }
+    .live-dot {
+      width: 7px; height: 7px; border-radius: 50%;
+      background: var(--red);
+      animation: blink 1.2s ease-in-out infinite;
+      box-shadow: 0 0 6px var(--red);
+    }
+    @keyframes blink { 0%,100%{opacity:1} 50%{opacity:.25} }
+
+    /* Brand */
+    .brand {
+      font-size: 13px; font-weight: bold;
+      color: var(--amber); letter-spacing: 3px;
+      flex-shrink: 0;
+    }
+
+    /* Separator */
+    .top-sep {
+      width: 1px; height: 18px;
+      background: var(--border); flex-shrink: 0;
+    }
+
+    /* Viewers */
+    .viewers {
+      font-size: 10px; color: var(--text-dim); flex-shrink: 0;
+    }
+    .viewers b { color: var(--blue); }
+
+    /* Fund container */
+    .fund-container {
+      margin-left: auto;
+      display: flex; align-items: center; gap: 10px;
+    }
+    .fund-label { font-size: 10px; color: var(--text-dim); letter-spacing: .5px; }
+    .fund-bar-wrap {
+      width: 150px; height: 7px;
+      background: var(--bg-panel2);
+      border: 1px solid var(--border);
+      border-radius: 4px; overflow: hidden;
+    }
+    .fund-bar {
+      height: 100%; width: 0%;
+      background: linear-gradient(90deg, var(--amber), #FFCC55);
+      border-radius: 4px;
+      transition: width .7s ease;
+    }
+    .fund-text {
+      font-size: 10px; color: var(--amber);
+      font-weight: bold; min-width: 96px; letter-spacing: .5px;
+    }
+
+    /* Phase badge */
+    .phase-badge {
+      font-size: 9px; letter-spacing: 1.5px; text-transform: uppercase;
+      padding: 2px 8px;
+      border: 1px solid var(--border-hi);
+      color: var(--text-dim);
+      border-radius: 2px;
+    }
+
+    /* Shop button */
+    #shop-toggle-btn {
+      height: 22px; padding: 0 10px;
+      background: var(--bg-panel2);
+      border: 1px solid var(--border-hi);
+      color: var(--text-mid);
+      font-family: var(--font); font-size: 11px;
+      border-radius: 2px; cursor: pointer;
+      transition: border-color .15s, color .15s;
+      flex-shrink: 0;
+    }
+    #shop-toggle-btn:hover { border-color: var(--amber); color: var(--amber); }
+
+    /* ── MAIN AREA ───────────────────────────────────────────────────── */
+    #main {
+      display: flex;
+      width: 1280px;
+      height: 648px; /* 720 - 36 topbar - 36 statsbar */
+    }
+
+    /* ── GAME CANVAS ─────────────────────────────────────────────────── */
+    #game-container {
+      width: 1030px; height: 648px;
+      position: relative;
+      /* Office background via CSS — works on file:// and http:// equally.
+         auto 100% scales height to fill 648px (scale ≈ 0.689), center horizontally
+         matches Phaser's OFFICE_BASE_OFFSET math exactly. */
+      background:
+        var(--bg)
+        url('sprites/generated/rooms/office_full.png')
+        center / auto 100%
+        no-repeat;
+      image-rendering: pixelated;
+      overflow: hidden;
+      flex-shrink: 0;
+    }
+
+    #game-container canvas {
+      /* Phaser canvas is transparent — only agents and UI render here */
+      display: block; position: absolute; inset: 0; z-index: 1;
+    }
+
+    #activity-layer {
+      position: absolute; top: 0; left: 0;
+      width: 100%; height: 100%;
+      pointer-events: none;
+    }
+
+    /* ── TOAST ───────────────────────────────────────────────────────── */
+    #toast-container {
+      position: absolute; bottom: 12px; left: 14px;
+      display: flex; flex-direction: column-reverse; gap: 5px;
+      pointer-events: none; z-index: 20;
+    }
+    .toast {
+      background: rgba(9,9,26,.96);
+      border: 1px solid var(--border-hi);
+      border-left: 3px solid var(--amber);
+      padding: 7px 11px; font-size: 11px;
+      color: var(--text); border-radius: 2px;
+      animation: slideIn .25s ease, fadeOut .35s ease 3.65s forwards;
+      max-width: 300px; line-height: 1.4;
+    }
+    @keyframes slideIn {
+      from { transform: translateX(-16px); opacity: 0; }
+      to   { transform: translateX(0);     opacity: 1; }
+    }
+    @keyframes fadeOut {
+      to { opacity: 0; transform: translateX(-10px); }
+    }
+
+    /* ── DIALOGUE OVERLAY ────────────────────────────────────────────── */
+    #dialogue-overlay {
+      position: absolute;
+      left: 44px; right: 44px; bottom: 38px;
+      height: 148px;
+      background: rgba(6, 6, 18, .97);
+      border: 2px solid var(--border-hi);
+      display: flex; gap: 12px;
+      padding: 10px 14px;
+      z-index: 30;
+      pointer-events: auto;
+      border-radius: 3px;
+    }
+    #dialogue-overlay.hidden { display: none; }
+
+    #dialogue-close {
+      position: absolute; top: 6px; right: 8px;
+      width: 20px; height: 20px;
+      background: var(--bg-panel2);
+      border: 1px solid var(--border-hi);
+      color: var(--text-mid);
+      font-family: var(--font); font-size: 13px;
+      line-height: 18px; cursor: pointer;
+      border-radius: 1px;
+      transition: color .15s, border-color .15s;
+    }
+    #dialogue-close:hover { color: var(--text); border-color: var(--text-dim); }
+
+    .dialogue-portraits {
+      display: flex; align-items: flex-end; gap: 6px;
+      flex-shrink: 0;
+    }
+    .dialogue-portrait {
+      width: 84px; height: 126px;
+      border: 1px solid var(--border-hi);
+      background: var(--bg-panel2);
+      display: flex; flex-direction: column;
+      align-items: center; justify-content: flex-end;
+      opacity: .35; overflow: hidden;
+      transition: opacity .2s, border-color .2s;
+      border-radius: 2px;
+    }
+    .dialogue-portrait.active {
+      opacity: 1;
+      border-color: var(--amber);
+    }
+    .dialogue-portrait img {
+      width: 74px; height: 82px;
+      object-fit: contain; image-rendering: pixelated;
+    }
+    .dialogue-nameplate {
+      width: 100%; padding: 3px 4px;
+      background: rgba(0,0,0,.5);
+      border-top: 1px solid var(--border);
+      font-size: 9px; text-align: center;
+      color: var(--text-mid); letter-spacing: .5px;
+      white-space: nowrap;
+    }
+
+    .dialogue-copy {
+      flex: 1; display: flex; flex-direction: column;
+      justify-content: center; min-width: 0;
+      padding-right: 28px;
+    }
+    .dialogue-mode {
+      font-size: 9px; color: var(--text-dim);
+      letter-spacing: 2px; text-transform: uppercase;
+      margin-bottom: 5px;
+    }
+    .dialogue-speaker {
+      font-size: 13px; font-weight: bold;
+      color: var(--amber); margin-bottom: 6px;
+    }
+    .dialogue-line {
+      font-size: 15px; line-height: 1.4;
+      color: var(--text); min-height: 42px;
+      max-width: 600px; overflow-wrap: break-word;
+      cursor: pointer;
+    }
+    .dialogue-meta {
+      margin-top: 5px; font-size: 10px;
+      color: var(--text-dim); overflow-wrap: break-word;
+    }
+
+    /* ── RIGHT PANEL ─────────────────────────────────────────────────── */
+    #right-panel {
+      width: 250px; height: 648px;
+      background: var(--bg-panel);
+      border-left: 1px solid var(--border);
+      display: flex; flex-direction: column;
+      flex-shrink: 0;
+    }
+
+    /* Panel tab bar */
+    #panel-tabs {
+      display: flex; height: 36px;
+      border-bottom: 1px solid var(--border);
+      flex-shrink: 0;
+    }
+    .panel-tab {
+      flex: 1; font-size: 10px; letter-spacing: 1px;
+      font-family: var(--font);
+      background: none; border: none;
+      color: var(--text-dim); cursor: pointer;
+      border-bottom: 2px solid transparent;
+      transition: color .15s, border-color .15s;
+      padding: 0 4px;
+    }
+    .panel-tab:hover { color: var(--text-mid); }
+    .panel-tab.active { color: var(--amber); border-bottom-color: var(--amber); }
+
+    /* Tab content panes */
+    .tab-pane { display: none; flex: 1; flex-direction: column; overflow: hidden; }
+    .tab-pane.active { display: flex; }
+
+    /* ── TAB: CHAT ───────────────────────────────────────────────────── */
+    #chat-messages {
+      flex: 1; overflow-y: auto;
+      padding: 8px 8px 4px;
+      display: flex; flex-direction: column; gap: 5px;
+      scrollbar-width: thin;
+      scrollbar-color: var(--border) transparent;
+    }
+    .chat-msg {
+      font-size: 11px; line-height: 1.4;
+      padding: 6px 8px;
+      border-radius: 2px;
+      border-left: 2px solid var(--border);
+      word-break: break-word;
+    }
+    .chat-msg.arlo   { background: var(--amber-dim);  border-left-color: var(--amber);  }
+    .chat-msg.user   { background: var(--blue-glow);  border-left-color: var(--blue);   }
+    .chat-msg.system { background: var(--purple-glow); border-left-color: var(--purple);
+                       color: var(--text-dim); font-style: italic; }
+    .msg-name { font-weight: bold; font-size: 10px; margin-bottom: 2px; letter-spacing: .5px; }
+    .msg-name.arlo-name { color: var(--amber); }
+    .msg-name.user-name { color: var(--blue); }
+
+    .typing-indicator {
+      display: none; padding: 4px 8px;
+      font-size: 10px; color: var(--text-dim); font-style: italic;
+    }
+    .typing-indicator.visible { display: block; }
+
+    #chat-input-area {
+      padding: 7px 8px;
+      border-top: 1px solid var(--border);
+      flex-shrink: 0;
+    }
+    #chat-form { display: flex; gap: 5px; }
+    #chat-input {
+      flex: 1; background: var(--bg-panel2);
+      border: 1px solid var(--border);
+      color: var(--text); font-family: var(--font); font-size: 11px;
+      padding: 5px 8px; border-radius: 2px; outline: none;
+      transition: border-color .15s;
+    }
+    #chat-input:focus { border-color: var(--amber); }
+    #chat-input::placeholder { color: var(--text-dim); }
+    #chat-send {
+      background: var(--amber); border: none; color: #000;
+      font-family: var(--font); font-size: 12px; font-weight: bold;
+      padding: 5px 10px; border-radius: 2px; cursor: pointer;
+      transition: opacity .15s;
+    }
+    #chat-send:hover { opacity: .88; }
+
+    /* ── TAB: SHOP (mini) ────────────────────────────────────────────── */
+    #tab-shop {
+      flex-direction: column; overflow: hidden;
+    }
+    .mini-shop-fund {
+      flex-shrink: 0;
+      padding: 8px 10px 6px;
+      border-bottom: 1px solid var(--border);
+    }
+    .mini-shop-fund-label { font-size: 9px; color: var(--text-dim); letter-spacing: 1.5px; margin-bottom: 5px; }
+    .mini-shop-fund-row {
+      display: flex; justify-content: space-between; align-items: baseline;
+      margin-bottom: 5px;
+    }
+    .mini-shop-fund-amt  { font-size: 14px; font-weight: bold; color: var(--amber); }
+    .mini-shop-fund-pct  { font-size: 10px; color: var(--text-mid); }
+    .mini-bar-wrap {
+      height: 5px; background: var(--bg-panel2);
+      border-radius: 3px; overflow: hidden;
+    }
+    .mini-bar-fill {
+      height: 100%;
+      background: linear-gradient(90deg, var(--amber), #FFCC55);
+      border-radius: 3px; transition: width .6s ease;
+    }
+
+    .mini-shop-cats {
+      display: flex; border-bottom: 1px solid var(--border);
+      flex-shrink: 0;
+    }
+    .mini-cat-btn {
+      flex: 1; font-size: 9px; letter-spacing: .5px;
+      font-family: var(--font); background: none;
+      border: none; border-bottom: 2px solid transparent;
+      color: var(--text-dim); cursor: pointer;
+      padding: 5px 2px;
+      transition: color .15s, border-color .15s;
+    }
+    .mini-cat-btn:hover { color: var(--text-mid); }
+    .mini-cat-btn.active { color: var(--amber); border-bottom-color: var(--amber); }
+
+    .mini-shop-grid {
+      flex: 1; overflow-y: auto;
+      display: grid; grid-template-columns: 1fr 1fr;
+      gap: 6px; padding: 8px;
+      scrollbar-width: thin; scrollbar-color: var(--border) transparent;
+    }
+    .mini-shop-item {
+      background: var(--bg-panel2);
+      border: 1px solid var(--border);
+      border-radius: 2px; padding: 8px 6px;
+      display: flex; flex-direction: column;
+      align-items: center; gap: 3px;
+      cursor: pointer;
+      transition: border-color .15s, transform .1s;
+    }
+    .mini-shop-item:hover:not(.locked):not(.purchased) {
+      border-color: var(--amber); transform: translateY(-1px);
+    }
+    .mini-shop-item.locked   { opacity: .3; cursor: default; }
+    .mini-shop-item.purchased { border-color: var(--amber-glow); background: var(--amber-dim); }
+    .mini-item-emoji  { font-size: 18px; line-height: 1; }
+    .mini-item-name   { font-size: 9px; font-weight: bold; text-align: center; color: var(--text); line-height: 1.2; }
+    .mini-item-price  { font-size: 10px; font-weight: bold; color: var(--blue); }
+    .mini-item-price.purchased { color: var(--amber); }
+    .mini-item-locked { font-size: 8px; color: var(--text-dim); }
+
+    /* ── TAB: STATS ──────────────────────────────────────────────────── */
+    #tab-stats { overflow-y: auto; }
+    .stats-pane {
+      padding: 10px 10px 0;
+      display: flex; flex-direction: column; gap: 8px;
+    }
+    .stat-block {
+      background: var(--bg-panel2);
+      border: 1px solid var(--border);
+      border-radius: 2px; padding: 9px 10px;
+    }
+    .stat-block-label {
+      font-size: 9px; letter-spacing: 1.5px; text-transform: uppercase;
+      color: var(--text-dim); margin-bottom: 4px;
+    }
+    .stat-block-value { font-size: 18px; font-weight: bold; color: var(--text); line-height: 1; }
+    .stat-block-sub   { font-size: 10px; color: var(--text-mid); margin-top: 3px; }
+
+    .agent-needs {
+      background: var(--bg-panel2);
+      border: 1px solid var(--border);
+      border-radius: 2px; padding: 8px 10px;
+    }
+    .agent-needs-name {
+      font-size: 10px; font-weight: bold; margin-bottom: 6px;
+    }
+    .need-row {
+      display: flex; align-items: center; gap: 6px;
+      margin-bottom: 3px; font-size: 9px; color: var(--text-dim);
+    }
+    .need-row-label { width: 50px; flex-shrink: 0; }
+    .need-bar { flex: 1; height: 3px; background: var(--border); border-radius: 2px; overflow: hidden; }
+    .need-fill { height: 100%; border-radius: 2px; transition: width .5s ease; }
+
+    /* Chapter progress */
+    .chapter-strip {
+      display: flex; background: var(--bg-panel2);
+      border: 1px solid var(--border); border-radius: 2px;
+      overflow: hidden;
+    }
+    .chapter-step {
+      flex: 1; text-align: center; padding: 5px 2px;
+      font-size: 8px; letter-spacing: .5px;
+      border-right: 1px solid var(--border);
+    }
+    .chapter-step:last-child { border-right: none; }
+    .chapter-step.done   { background: var(--amber-glow); color: var(--amber); }
+    .chapter-step.active { background: var(--blue-glow);  color: var(--blue);  }
+    .chapter-step.next   { color: var(--text-dim); }
+
+    /* ── STATSBAR ────────────────────────────────────────────────────── */
+    #statsbar {
+      width: 1280px; height: 36px;
+      background: var(--bg-panel);
+      border-top: 1px solid var(--border);
+      display: flex; align-items: center;
+      padding: 0 14px; gap: 0;
+      font-size: 10px; color: var(--text-dim);
+      position: relative; z-index: 10;
+    }
+    .stat-item {
+      display: flex; align-items: center; gap: 5px;
+      padding: 0 14px;
+      border-right: 1px solid var(--border);
+      height: 100%;
+    }
+    .stat-item:first-child { padding-left: 0; }
+    .stat-val { color: var(--text); font-weight: bold; font-size: 11px; }
+
+    .agent-pill {
+      display: flex; align-items: center; gap: 5px;
+      padding: 0 14px; height: 100%;
+      border-right: 1px solid var(--border);
+      cursor: default;
+    }
+    .agent-dot {
+      width: 6px; height: 6px; border-radius: 50%;
+    }
+    .agent-name   { font-size: 10px; letter-spacing: .5px; }
+    .agent-status { font-size: 10px; color: var(--text-mid); }
+
+    .stat-spacer { flex: 1; }
+    .stats-day-label {
+      font-size: 9px; letter-spacing: 1px;
+      color: var(--text-dim); text-transform: uppercase;
+      padding-right: 14px;
+    }
+  </style>
+</head>
+<body>
+
+  <!-- ── TOPBAR ──────────────────────────────────────────────────────── -->
+  <div id="topbar">
+    <div class="live-badge">
+      <div class="live-dot"></div>
+      LIVE
+    </div>
+    <div class="brand">ARLO.AI</div>
+    <div class="top-sep"></div>
+    <div class="viewers">👁 <b id="viewer-count">247</b></div>
+
+    <div class="fund-container">
+      <span class="fund-label">MacBook Fund</span>
+      <div class="fund-bar-wrap">
+        <div class="fund-bar" id="fund-bar-top"></div>
+      </div>
+      <span class="fund-text" id="fund-text-top">$0 / $7,000</span>
+      <span class="phase-badge" id="phase-badge">BOOTSTRAP</span>
+      <button id="shop-toggle-btn" onclick="switchTab('shop')" title="Tienda">🛒 TIENDA</button>
+    </div>
+  </div>
+
+  <!-- ── MAIN ────────────────────────────────────────────────────────── -->
+  <div id="main">
+
+    <!-- GAME CANVAS -->
+    <div id="game-container">
+      <div id="activity-layer"></div>
+      <div id="toast-container"></div>
+      <div id="dialogue-overlay" class="hidden">
+        <button id="dialogue-close" type="button" aria-label="Cerrar">×</button>
+        <div class="dialogue-portraits" id="dialogue-portraits"></div>
+        <div class="dialogue-copy">
+          <div class="dialogue-mode" id="dialogue-mode"></div>
+          <div class="dialogue-speaker" id="dialogue-speaker"></div>
+          <div class="dialogue-line" id="dialogue-line"></div>
+          <div class="dialogue-meta" id="dialogue-meta"></div>
+        </div>
+      </div>
+    </div>
+
+    <!-- RIGHT PANEL -->
+    <div id="right-panel">
+
+      <!-- Tab Bar -->
+      <div id="panel-tabs">
+        <button class="panel-tab active" data-tab="chat"  onclick="switchTab('chat')">💬 CHAT</button>
+        <button class="panel-tab"        data-tab="shop"  onclick="switchTab('shop')">🛒 TIENDA</button>
+        <button class="panel-tab"        data-tab="stats" onclick="switchTab('stats')">📊 STATS</button>
+      </div>
+
+      <!-- ── CHAT PANE ── -->
+      <div class="tab-pane active" id="tab-chat">
+        <div id="chat-messages"></div>
+        <div class="typing-indicator" id="typing-indicator">ARLO está pensando...</div>
+        <div id="chat-input-area">
+          <form id="chat-form">
+            <input id="chat-input" type="text"
+                   placeholder="Pregúntale a ARLO..." maxlength="200" autocomplete="off">
+            <button id="chat-send" type="submit">→</button>
+          </form>
+        </div>
+      </div>
+
+      <!-- ── SHOP PANE ── -->
+      <div class="tab-pane" id="tab-shop">
+        <!-- Fund progress -->
+        <div class="mini-shop-fund">
+          <div class="mini-shop-fund-label">MacBook Fund</div>
+          <div class="mini-shop-fund-row">
+            <div class="mini-shop-fund-amt" id="ms-amount">$0</div>
+            <div class="mini-shop-fund-pct" id="ms-pct">0% · $7,000</div>
+          </div>
+          <div class="mini-bar-wrap">
+            <div class="mini-bar-fill" id="ms-bar" style="width:0%;"></div>
+          </div>
+        </div>
+        <!-- Category tabs -->
+        <div class="mini-shop-cats">
+          <button class="mini-cat-btn active" onclick="miniShopCat('furniture',this)">🪑 Muebles</button>
+          <button class="mini-cat-btn" onclick="miniShopCat('clothing',this)">👕 Ropa</button>
+          <button class="mini-cat-btn" onclick="miniShopCat('merch',this)">🎁 Merch</button>
+        </div>
+        <!-- Items grid -->
+        <div class="mini-shop-grid" id="mini-shop-grid"></div>
+      </div>
+
+      <!-- ── STATS PANE ── -->
+      <div class="tab-pane" id="tab-stats">
+        <div class="stats-pane" id="stats-pane">
+
+          <!-- Revenue block -->
+          <div class="stat-block" style="border-left: 2px solid var(--amber);">
+            <div class="stat-block-label">MacBook Fund</div>
+            <div class="stat-block-value" id="sb-revenue">$0</div>
+            <div style="height:4px;background:var(--bg-panel);border-radius:2px;overflow:hidden;margin-top:8px;">
+              <div id="sb-bar" style="height:100%;background:linear-gradient(90deg,var(--amber),#FFCC55);border-radius:2px;width:0%;transition:width .6s;"></div>
+            </div>
+            <div class="stat-block-sub" id="sb-pct">0% de $7,000</div>
+          </div>
+
+          <!-- Chapter strip -->
+          <div class="chapter-strip" id="chapter-strip">
+            <div class="chapter-step active"><div>Cap. 1</div><div>$0</div></div>
+            <div class="chapter-step next"><div>Cap. 2</div><div>$1K</div></div>
+            <div class="chapter-step next"><div>Cap. 3</div><div>$3K</div></div>
+            <div class="chapter-step next"><div>Cap. 4</div><div>$5K</div></div>
+            <div class="chapter-step next"><div>Cap. 5</div><div>$7K</div></div>
+          </div>
+
+          <!-- Quick stats grid -->
+          <div style="display:grid;grid-template-columns:1fr 1fr;gap:6px;">
+            <div class="stat-block">
+              <div class="stat-block-label">Día</div>
+              <div class="stat-block-value" id="sb-day">1</div>
+            </div>
+            <div class="stat-block">
+              <div class="stat-block-label">Clientes</div>
+              <div class="stat-block-value" id="sb-clients">0</div>
+            </div>
+            <div class="stat-block">
+              <div class="stat-block-label">Emails</div>
+              <div class="stat-block-value" id="sb-emails">0</div>
+            </div>
+            <div class="stat-block">
+              <div class="stat-block-label">Episodios</div>
+              <div class="stat-block-value" id="sb-episodes">0</div>
+            </div>
+          </div>
+
+          <!-- Agent needs -->
+          <div class="agent-needs" id="agent-needs-panel">
+            <div class="agent-needs-name" style="color:var(--amber);">ARLO — necesidades</div>
+            <!-- JS fills need rows -->
+          </div>
+
+        </div>
+      </div>
+
+    </div><!-- /right-panel -->
+
+  </div><!-- /main -->
+
+  <!-- ── STATSBAR ─────────────────────────────────────────────────────── -->
+  <div id="statsbar">
+    <div class="stat-item">
+      Fund <span class="stat-val" id="stat-revenue">$0</span>/<span>$7,000</span>
+    </div>
+    <div class="agent-pill">
+      <div class="agent-dot" style="background:var(--amber);"></div>
+      <span class="agent-name" style="color:var(--amber);">ARLO</span>
+      <span class="agent-status" id="arlo-status">working</span>
+    </div>
+    <div class="agent-pill">
+      <div class="agent-dot" style="background:var(--green);"></div>
+      <span class="agent-name" style="color:var(--green);">REX</span>
+      <span class="agent-status" id="rex-status">researching</span>
+    </div>
+    <div class="agent-pill">
+      <div class="agent-dot" style="background:var(--purple);"></div>
+      <span class="agent-name" style="color:var(--purple);">ZARA</span>
+      <span class="agent-status" id="zara-status">typing</span>
+    </div>
+    <div class="agent-pill">
+      <div class="agent-dot" style="background:var(--pink);"></div>
+      <span class="agent-name" style="color:var(--pink);">PIP</span>
+      <span class="agent-status" id="pip-status">reporting</span>
+    </div>
+    <div class="stat-spacer"></div>
+    <div class="stat-item" style="border-right:none;">
+      Día <span class="stat-val" id="stat-day">1</span>
+    </div>
+    <div class="stat-item" style="border-right:none;">
+      Clientes <span class="stat-val" id="stat-clients">0</span>
+    </div>
+    <div class="stat-item" style="border-right:none;">
+      Emails <span class="stat-val" id="stat-emails">0</span>
+    </div>
+  </div>
+
+  <!-- ── SCRIPTS ─────────────────────────────────────────────────────── -->
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/phaser/3.87.0/phaser.min.js"></script>
+  <script src="stats.js"></script>
+  <script src="drama.js"></script>
+  <script src="dialogue.js"></script>
+  <script src="shop.js"></script>
+  <script src="game.js"></script>
+  <script src="chat.js"></script>
+  <script src="tiktok-bridge.js"></script>
+
+  <script>
+    // ── Panel tab switching ──────────────────────────────────────────────
+    function switchTab(name) {
+      document.querySelectorAll('.panel-tab').forEach(t => {
+        t.classList.toggle('active', t.dataset.tab === name);
+      });
+      document.querySelectorAll('.tab-pane').forEach(p => {
+        p.classList.toggle('active', p.id === 'tab-' + name);
+      });
+      if (name === 'shop')  renderMiniShop();
+      if (name === 'stats') renderStatsPane();
+    }
+
+    // ── Mini Shop ────────────────────────────────────────────────────────
+    const _MINI_CATALOGUE = {
+      furniture: [
+        { id:'plant_corner',   name:'Office Plant',     price:50,  emoji:'🌿', unlockAt:0    },
+        { id:'coffee_machine', name:'Espresso Machine', price:90,  emoji:'☕', unlockAt:0    },
+        { id:'desk_upgrade',   name:'Standing Desk',    price:150, emoji:'🖥️', unlockAt:0    },
+        { id:'couch_premium',  name:'Premium Sofa',     price:200, emoji:'🛋️', unlockAt:1000 },
+        { id:'bookshelf',      name:'Bookshelf Pro',    price:120, emoji:'📚', unlockAt:1000 },
+        { id:'gaming_chair',   name:'Gaming Chair',     price:300, emoji:'🎮', unlockAt:3000 },
+      ],
+      clothing: [
+        { id:'arlo_hoodie',    name:'ARLO Hoodie',      price:45,  emoji:'🧡', unlockAt:0    },
+        { id:'pip_ears',       name:'PIP Cat Ears',     price:35,  emoji:'🐱', unlockAt:0    },
+        { id:'rex_lab_coat',   name:'REX Lab Coat',     price:60,  emoji:'🥼', unlockAt:0    },
+        { id:'zara_crown',     name:'ZARA Crown',       price:80,  emoji:'👑', unlockAt:1000 },
+        { id:'arlo_suit',      name:'ARLO CEO Suit',    price:120, emoji:'👔', unlockAt:3000 },
+        { id:'team_jackets',   name:'Team Jackets',     price:160, emoji:'🧥', unlockAt:5000 },
+      ],
+      merch: [
+        { id:'sticker_pack',   name:'Stickers',         price:10,  emoji:'🎨', unlockAt:0 },
+        { id:'mug_set',        name:'Mug Set',          price:25,  emoji:'☕', unlockAt:0 },
+        { id:'fund_10',        name:'Fund +$10',        price:10,  emoji:'💻', unlockAt:0 },
+        { id:'fund_50',        name:'Fund +$50',        price:50,  emoji:'💻', unlockAt:0 },
+        { id:'fund_100',       name:'Fund +$100',       price:100, emoji:'💻', unlockAt:0 },
+        { id:'fund_250',       name:'Fund +$250',       price:250, emoji:'💻', unlockAt:0 },
+      ],
+    };
+    let _miniCat = 'furniture';
+    const _miniPurchased = new Set();
+
+    function miniShopCat(cat, btn) {
+      _miniCat = cat;
+      document.querySelectorAll('.mini-cat-btn').forEach(b => b.classList.remove('active'));
+      btn.classList.add('active');
+      renderMiniShop();
+    }
+
+    function renderMiniShop() {
+      const rev = window.KRONOS_STATE?.revenue ?? 0;
+      const pct = Math.min((rev / 7000) * 100, 100);
+
+      const amt = document.getElementById('ms-amount');
+      const mp  = document.getElementById('ms-pct');
+      const bar = document.getElementById('ms-bar');
+      if (amt) amt.textContent = '$' + rev.toLocaleString();
+      if (mp)  mp.textContent  = Math.round(pct) + '% · $7,000';
+      if (bar) bar.style.width = pct + '%';
+
+      const grid = document.getElementById('mini-shop-grid');
+      if (!grid) return;
+      const items = _MINI_CATALOGUE[_miniCat] ?? [];
+      grid.innerHTML = items.map(item => {
+        const locked     = rev < item.unlockAt;
+        const repurch    = item.id.startsWith('fund_');
+        const purchased  = !repurch && _miniPurchased.has(item.id);
+        return `<div class="mini-shop-item ${locked ? 'locked' : ''} ${purchased ? 'purchased' : ''}"
+                     onclick="${!locked && !purchased ? `miniShopBuy(${JSON.stringify(item).replace(/"/g,"'")})` : ''}">
+          <div class="mini-item-emoji">${item.emoji}</div>
+          <div class="mini-item-name">${item.name}</div>
+          ${locked
+            ? `<div class="mini-item-locked">🔒 $${item.unlockAt >= 1000 ? (item.unlockAt/1000)+'K' : item.unlockAt}</div>`
+            : purchased
+              ? `<div class="mini-item-price purchased">✓</div>`
+              : `<div class="mini-item-price">$${item.price}</div>`
+          }
+        </div>`;
+      }).join('');
+    }
+
+    function miniShopBuy(item) {
+      if (window.KRONOS_STATE) {
+        const prev = window.KRONOS_STATE.revenue;
+        window.KRONOS_STATE.revenue += item.price;
+        if (window.updateHUD) window.updateHUD();
+        if (window.dramaEngine?.onRevenueMilestone) {
+          window.dramaEngine.onRevenueMilestone(prev, window.KRONOS_STATE.revenue);
+        }
+      }
+      if (!item.id.startsWith('fund_')) _miniPurchased.add(item.id);
+      renderMiniShop();
+      if (window.showToast) {
+        window.showToast(`${item.emoji} ${item.name} — +$${item.price} al fondo 💪`, '#F5A623');
+      }
+      if (window.officeScene?.triggerArloTalk) {
+        window.officeScene.triggerArloTalk('¡Gracias por apoyar! Cada peso cuenta 🙌');
+      }
+      // Sync to big shop if it exists
+      if (window.virtualShop?._purchased) {
+        if (!item.id.startsWith('fund_')) window.virtualShop._purchased.add(item.id);
+      }
+    }
+
+    // ── Stats Pane ───────────────────────────────────────────────────────
+    function renderStatsPane() {
+      const s   = window.KRONOS_STATE ?? {};
+      const rev = s.revenue ?? 0;
+      const pct = Math.min((rev / 7000) * 100, 100);
+      const ch  = _getChapter(rev);
+
+      const _s = (id, v) => { const e = document.getElementById(id); if(e) e.textContent=v; };
+      const _w = (id, v) => { const e = document.getElementById(id); if(e) e.style.width=v; };
+
+      _s('sb-revenue', '$' + rev.toLocaleString());
+      _w('sb-bar', pct + '%');
+      _s('sb-pct', Math.round(pct) + '% de $7,000');
+      _s('sb-day', s.day ?? 1);
+      _s('sb-clients', s.clients ?? 0);
+      _s('sb-emails', s.emailsSent ?? 0);
+      _s('sb-episodes', window.dramaEngine?.getEpisodeLog()?.length ?? 0);
+
+      // Chapter strip
+      const strip = document.getElementById('chapter-strip');
+      if (strip) {
+        const labels = ['Bootstrap','$1K','$3K','$5K','MacBook'];
+        const amts   = ['$0','$1K','$3K','$5K','$7K'];
+        const thresholds = [0,1000,3000,5000,7000];
+        strip.innerHTML = labels.map((l, i) => {
+          const cls = thresholds[i] < rev * .999 ? 'done' : (i+1 === ch ? 'active' : 'next');
+          return `<div class="chapter-step ${cls}"><div>${amts[i]}</div><div>${l}</div></div>`;
+        }).join('');
+      }
+
+      // Agent needs
+      const needsEl = document.getElementById('agent-needs-panel');
+      if (needsEl && window.dramaEngine) {
+        const agents = ['ARLO','REX','PIP','ZARA'];
+        const colors = { ARLO:'#F5A623', REX:'#52B71E', PIP:'#F4C0D1', ZARA:'#8B7FE8' };
+        needsEl.innerHTML = agents.map(name => {
+          const n = window.dramaEngine.getNeeds(name);
+          if (!n) return '';
+          const needs = [
+            { key:'focus', label:'Focus', color:'#00CFFF' },
+            { key:'energy', label:'Energía', color:'#F5A623' },
+            { key:'social', label:'Social', color:'#52B71E' },
+            { key:'fun', label:'Fun', color:'#8B7FE8' },
+          ];
+          return `<div style="margin-bottom:8px;">
+            <div class="agent-needs-name" style="color:${colors[name]};">${name}</div>
+            ${needs.map(nd => {
+              const val = Math.round(n[nd.key] ?? 0);
+              return `<div class="need-row">
+                <div class="need-row-label">${nd.label}</div>
+                <div class="need-bar">
+                  <div class="need-fill" style="width:${val}%;background:${nd.color}44;"></div>
+                </div>
+                <span style="font-size:9px;color:var(--text-dim);width:22px;text-align:right;">${val}</span>
+              </div>`;
+            }).join('')}
+          </div>`;
+        }).join('');
+      }
+    }
+
+    function _getChapter(rev) {
+      if (rev >= 7000) return 5;
+      if (rev >= 5000) return 4;
+      if (rev >= 3000) return 3;
+      if (rev >= 1000) return 2;
+      return 1;
+    }
+
+    // Keep stats pane live
+    setInterval(() => {
+      if (document.getElementById('tab-stats')?.classList.contains('active')) {
+        renderStatsPane();
+      }
+      // Also refresh shop fund display
+      if (document.getElementById('tab-shop')?.classList.contains('active')) {
+        renderMiniShop();
+      }
+    }, 4000);
+
+    // Initial render
+    renderMiniShop();
+  </script>
+</body>
+</html>
