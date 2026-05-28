@@ -102,6 +102,32 @@ const BAKED_SPOTS = {
   kitchen_counter: officeSpot(1285, 835, 'kitchen', { pose: 'interact', status: 'reviewing', bubble: 'Revisando mugs del equipo...', approach: [1285, 835] }),
 };
 
+// Gathering positions for team conversations — 4 slots per room, isometric screen coords.
+// Agents walk here before dialogue starts, return to their spots after.
+const MEETING_SPOTS = {
+  // Lounge: social/drama/hoesik/romance — around the coffee table
+  lounge: [
+    officePoint(340, 400), // front-left  (ARLO)
+    officePoint(490, 380), // front-right (ZARA)
+    officePoint(280, 440), // back-left   (REX)
+    officePoint(555, 440), // back-right  (PIP)
+  ],
+  // Work room: leader/work discussions — around the desk cluster
+  work: [
+    officePoint(1205, 540), // left desk   (ARLO)
+    officePoint(1320, 510), // center desk (REX)
+    officePoint(1200, 590), // front-left  (ZARA)
+    officePoint(1370, 560), // front-right (PIP)
+  ],
+  // Game room: casual / ping-pong area
+  gaming: [
+    officePoint(295, 760), // left side
+    officePoint(510, 840), // right side
+    officePoint(370, 720), // back-left
+    officePoint(450, 870), // front-right
+  ],
+};
+
 const BAKED_TRANSIT = {
   lounge: officePoint(820, 510),
   work: officePoint(990, 515),
@@ -2077,67 +2103,142 @@ class OfficeScene extends Phaser.Scene {
       text: lines[0]?.text || '',
     };
 
-    // ── Route through visual novel viewer when available ──────────────────
-    const viewer = window.dialogueViewer;
-    if (viewer) {
-      viewer.play(agents, lines, type, () => {
-        // On finish: restore work bubbles and clear panel
+    // ── Gather all agents to one room, then start dialogue ────────────────
+    this._gatherForConversation(agents, type, () => {
+      const viewer = window.dialogueViewer;
+      if (viewer) {
+        viewer.play(agents, lines, type, () => {
+          this._afterConversation(agents, lines);
+        });
+        this._mirrorDialogueViewerPoses(agents, lines);
+        return;
+      }
+
+      // ── Fallback: legacy time.delayedCall loop ────────────────────────
+      let delay = 0;
+      const PER_LINE_MS = 3400;
+
+      lines.forEach(({ agent: name, text }, index) => {
+        this.time.delayedCall(delay, () => {
+          if (!this.agents[name]) return;
+          this.activeDialogue = { agents, lines, type, activeName: name, text };
+          this._renderDialoguePanel({
+            agents,
+            activeName: name,
+            mode: `${this._dialogueModeLabel(type)} ${index + 1}/${lines.length}`,
+            speaker: `${name} · ${AGENT_UI[name]?.role || 'Agente'}`,
+            text,
+            meta: agents.length > 1 ? agents.join(' + ') : 'Monólogo',
+            type,
+          });
+          agents.forEach(agentName => {
+            if (this.agents[agentName]?.usesGeneratedArt) {
+              this._setAgentPose(agentName, agentName === name ? 'talk' : 'idle');
+            }
+          });
+        });
+        delay += PER_LINE_MS;
+      });
+
+      this.time.delayedCall(delay + 1500, () => {
         this._afterConversation(agents, lines);
       });
-      // Mirror active speaker to sprite poses while viewer is playing
-      this._mirrorDialogueViewerPoses(agents, lines);
-      return;
-    }
-
-    // ── Fallback: legacy time.delayedCall loop ────────────────────────────
-    let delay = 0;
-    const PER_LINE_MS = 3400;
-
-    lines.forEach(({ agent: name, text }, index) => {
-      this.time.delayedCall(delay, () => {
-        if (!this.agents[name]) return;
-        this.activeDialogue = { agents, lines, type, activeName: name, text };
-        this._renderDialoguePanel({
-          agents,
-          activeName: name,
-          mode: `${this._dialogueModeLabel(type)} ${index + 1}/${lines.length}`,
-          speaker: `${name} · ${AGENT_UI[name]?.role || 'Agente'}`,
-          text,
-          meta: agents.length > 1 ? agents.join(' + ') : 'Monólogo',
-          type,
-        });
-        agents.forEach(agentName => {
-          if (this.agents[agentName]?.usesGeneratedArt) {
-            this._setAgentPose(agentName, agentName === name ? 'talk' : (BAKED_SPOTS[this.agents[agentName].spotKey]?.pose || 'idle'));
-          }
-        });
-      });
-      delay += PER_LINE_MS;
-    });
-
-    this.time.delayedCall(delay + 1500, () => {
-      this._afterConversation(agents, lines);
     });
   }
 
-  // Restore agent state after a conversation finishes
-  _afterConversation(agents, lines) {
-    agents.forEach(name => {
-      if (this.agents[name] && this.bubbles[name]?.visible) {
-        const engine  = window.dramaEngine;
-        const spotKey = this.agents[name].spotKey;
-        const txt     = engine ? engine.randomWorkLineForSpot(name, spotKey) : '';
-        const tp      = engine ? engine.getBubbleType(spotKey) : 'work';
-        if (txt) this._renderBubble(name, txt, tp);
-        else     this._hideBubble(name);
-      }
+  // Move all conversation agents to a meeting spot, fire onReady when all arrive.
+  _gatherForConversation(agents, type, onReady) {
+    // Pick room based on conversation type
+    const roomKey = (type === 'leader' || type === 'work')
+      ? 'work'
+      : (type === 'hoesik' || type === 'social' || type === 'drama' || type === 'romance')
+        ? 'lounge'
+        : 'lounge'; // default
+
+    const slots   = MEETING_SPOTS[roomKey] ?? MEETING_SPOTS.lounge;
+    const agentList = [...agents]; // preserve order for slot assignment
+
+    // Save pre-meeting state so _afterConversation can restore it
+    agentList.forEach(name => {
+      const agent = this.agents[name];
+      if (agent) agent._preMeetingSpotKey = agent.spotKey;
     });
+
+    let arrived = 0;
+    const total  = agentList.length;
+    const checkDone = () => { arrived++; if (arrived >= total) onReady(); };
+
+    agentList.forEach((name, i) => {
+      const agent = this.agents[name];
+      if (!agent) { checkDone(); return; }
+
+      const target = slots[i % slots.length];
+
+      // Stop whatever the agent is doing
+      this.tweens.killTweensOf(agent.sprite);
+      if (agent.walkTimer) { agent.walkTimer.remove(false); agent.walkTimer = null; }
+      this._hideBubble(name);
+
+      const dist     = Phaser.Math.Distance.Between(agent.sprite.x, agent.sprite.y, target.x, target.y);
+      const duration = Math.max(500, Math.min(dist * 2.5, 2200)); // 400–2200ms walk
+
+      this._startWalkCycle(name);
+      agent.room = roomKey;
+
+      this.tweens.add({
+        targets: agent.sprite,
+        x: target.x,
+        y: target.y,
+        duration,
+        ease: 'Quad.easeInOut',
+        onUpdate: () => {
+          // Keep depth sorted by Y so agents layer correctly
+          agent.sprite.setDepth(10 + agent.sprite.y / 100);
+          // Move name bubble with agent
+          if (this.bubbles[name]) {
+            this.bubbles[name].container.setPosition(agent.sprite.x, agent.sprite.y - 52);
+          }
+        },
+        onComplete: () => {
+          agent.pos = { x: target.x, y: target.y, room: roomKey };
+          agent.spotKey = null; // no fixed spot during meeting
+          this._stopWalkCycle(name, 'idle');
+          this._setAgentPose(name, 'idle');
+          checkDone();
+        },
+      });
+    });
+  }
+
+  // Restore agent state after a conversation finishes — walk back to original spot
+  _afterConversation(agents, lines) {
     if (this.activeDialogue?.lines === lines) {
       this.activeDialogue = null;
       this.time.delayedCall(2500, () => {
         if (!this.activeDialogue) this._hideDialoguePanel();
       });
     }
+
+    // Brief pause before dispersing — feels more natural
+    this.time.delayedCall(1200, () => {
+      agents.forEach(name => {
+        const agent = this.agents[name];
+        if (!agent) return;
+
+        // Return to pre-meeting spot if we saved one
+        const returnSpotKey = agent._preMeetingSpotKey;
+        agent._preMeetingSpotKey = null;
+
+        if (returnSpotKey && BAKED_SPOTS[returnSpotKey]) {
+          this._moveAgentToSpot(name, returnSpotKey);
+        } else {
+          // Fallback: pick any spot in their default room
+          const defaultActions = BAKED_AGENT_ACTIONS[name] ?? [];
+          const spotKey = defaultActions[Math.floor(Math.random() * defaultActions.length)];
+          if (spotKey) this._moveAgentToSpot(name, spotKey);
+        }
+      });
+    });
   }
 
   // Drive sprite poses in sync with dialogueViewer timing
