@@ -8,7 +8,7 @@
  * 4. Reflects and adjusts strategy weekly
  */
 
-import Anthropic from '@anthropic-ai/sdk'
+import { createLLM, type LLM } from '../../llm/client.js'
 import { getConfig } from '../../config/index.js'
 import { remember, recall } from '../../memory/long-term.js'
 import { notify } from '../../safety/approvals.js'
@@ -17,16 +17,9 @@ import { ResearchAgent } from '../researcher/index.js'
 import { AnalystAgent } from '../analyst/index.js'
 import { ExecutorAgent } from '../executor/index.js'
 import { ReporterAgent } from '../reporter/index.js'
+import type { Task, KronosState } from '../../types.js'
 
-export interface KronosState {
-  phase: 'BOOTSTRAP' | 'EARNING' | 'MAC_ACQUIRED' | 'SCALING'
-  primaryGoal: string
-  weeklyRevenue: number
-  totalRevenue: number
-  currentClients: number
-  daysRunning: number
-  lastReflection?: string
-}
+export type { Task, KronosState } from '../../types.js'
 
 const SYSTEM_PROMPT = `You are KRONOS, an autonomous business development agent. 
 
@@ -48,7 +41,7 @@ Core principles:
 You operate in ${process.env.KRONOS_TIMEZONE || 'America/Santiago'}, primarily in Spanish.`
 
 export class OrchestratorAgent {
-  private client: Anthropic
+  private client: LLM
   private researcher: ResearchAgent
   private analyst: AnalystAgent
   private executor: ExecutorAgent
@@ -56,7 +49,7 @@ export class OrchestratorAgent {
 
   constructor() {
     const config = getConfig()
-    this.client = new Anthropic({ apiKey: config.anthropicApiKey })
+    this.client = createLLM(config)
     this.researcher = new ResearchAgent()
     this.analyst = new AnalystAgent()
     this.executor = new ExecutorAgent()
@@ -224,14 +217,4 @@ Be brutally honest. This drives next week's priorities.`
   private async saveState(state: KronosState): Promise<void> {
     await remember('kronos_state', state, 'system')
   }
-}
-
-// Types used internally
-interface Task {
-  title: string
-  agent: 'researcher' | 'analyst' | 'executor' | 'reporter'
-  priority: 'HIGH' | 'MEDIUM' | 'LOW'
-  estimatedTimeMin?: number
-  expectedOutcome?: string
-  [key: string]: unknown
 }

@@ -1,0 +1,25 @@
+{
+  "name": "kronosproject",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "description": "KRONOS autonomous business agent and ARLO stream frontend.",
+  "scripts": {
+    "pcos:e2e": "node scripts/pcos-e2e.mjs",
+    "verify": "node scripts/verify-static.mjs",
+    "verify:readiness": "node scripts/verify-readiness.mjs",
+    "typecheck": "tsc --noEmit",
+    "dev": "tsx src/index.ts once",
+    "start": "tsx src/index.ts start",
+    "test": "npm run verify",
+    "stream:check": "node scripts/verify-static.mjs"
+  },
+  "engines": {
+    "node": ">=20"
+  },
+  "devDependencies": {
+    "@types/node": "^22.0.0",
+    "tsx": "^4.19.0",
+    "typescript": "^5.6.0"
+  }
+}
