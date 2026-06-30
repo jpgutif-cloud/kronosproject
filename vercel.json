@@ -2,8 +2,8 @@
   "version": 2,
   "public": true,
   "outputDirectory": "stream",
-  "buildCommand": null,
-  "installCommand": null,
+  "buildCommand": "echo 'KRONOS: static deploy — stream/ is prebuilt, no build step'",
+  "installCommand": "echo 'KRONOS: static deploy — no install (root package.json is for the backend, not the frontend)'",
   "framework": null,
   "routes": [
     { "src": "/", "dest": "/index.html" },
