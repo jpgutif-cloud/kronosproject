@@ -122,7 +122,7 @@ Inject `{revenue}` and `{day}` dynamically before each API call.
 
 **Anti-injection (2 layers):**
 1. Client regex filter before API call (see `chat.js`)
-2. Hardcoded rules in system prompt that Codex cannot override
+2. Hardcoded rules in system prompt that the model cannot override
 
 ---
 
@@ -130,10 +130,10 @@ Inject `{revenue}` and `{day}` dynamically before each API call.
 
 | Task | Model | Why |
 |------|-------|-----|
-| Orchestrator planning, reflection | `Codex-sonnet-4-6` | Complex reasoning |
-| Outreach emails, audit reports | `Codex-sonnet-4-6` | Quality writing |
-| Lead scoring, classification | `Codex-haiku-4-5-20251001` | High volume, low cost |
-| Stream chat (ARLO persona) | `Codex-sonnet-4-20250514` | Personality + speed |
+| Orchestrator planning, reflection | `claude-sonnet-4-6` | Complex reasoning |
+| Outreach emails, audit reports | `claude-sonnet-4-6` | Quality writing |
+| Lead scoring, classification | `claude-haiku-4-5-20251001` | High volume, low cost |
+| Stream chat (ARLO persona) | `claude-sonnet-4-6` | Personality + speed |
 | Future local inference (M5 Max) | `hermes-3:70b-q4` via Ollama | Zero API cost |
 
 Use `config.modelFast` and `config.modelSmart` — never hardcode model strings.
